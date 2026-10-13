@@ -13,7 +13,7 @@ interface AudioButtonProps {
 
 export const AudioButton: React.FC<AudioButtonProps> = ({
   text,
-  speed = 0.9,
+  speed = 0.82,
   label,
   size = 'md',
   variant = 'primary',

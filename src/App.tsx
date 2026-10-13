@@ -7,9 +7,12 @@ import {
 import { initAudioVoices } from './utils/audio';
 import { UserProgress, Language } from './types/curriculum';
 import { getUnitById } from './data/curriculumData';
-import { Navbar } from './components/Navbar';
+import { Navbar, WebsiteView } from './components/Navbar';
 import { UnitDashboard } from './components/UnitDashboard';
 import { UnitView } from './components/UnitView';
+import { MethodPage } from './components/MethodPage';
+import { SynopticMatrix } from './components/SynopticMatrix';
+import { WorksheetsPage } from './components/WorksheetsPage';
 import { PreparatoryModal } from './components/PreparatoryModal';
 import { DictionaryModal } from './components/DictionaryModal';
 import { ProgressReportModal } from './components/ProgressReportModal';
@@ -17,6 +20,7 @@ import { getTranslation } from './translations/i18n';
 
 export default function App() {
   const [progress, setProgress] = useState<UserProgress>(loadUserProgress);
+  const [currentView, setCurrentView] = useState<WebsiteView>('home');
   const [currentUnitId, setCurrentUnitId] = useState<number | null>(null);
   const [isPreparatoryOpen, setIsPreparatoryOpen] = useState(false);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
@@ -42,6 +46,7 @@ export default function App() {
   const handleSelectUnit = (unitId: number | null) => {
     setCurrentUnitId(unitId);
     if (unitId !== null) {
+      setCurrentView('units');
       setProgress((prev) => ({
         ...prev,
         lastVisitedUnit: unitId,
@@ -115,6 +120,8 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-amber-50/40 text-slate-800">
       {/* Navigation Header */}
       <Navbar
+        currentView={currentView}
+        onChangeView={setCurrentView}
         currentUnitId={currentUnitId}
         onSelectUnit={handleSelectUnit}
         language={progress.selectedLanguage}
@@ -127,8 +134,8 @@ export default function App() {
         onOpenReport={() => setIsReportOpen(true)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+      {/* Main Website Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4">
         {currentUnit ? (
           <UnitView
             unit={currentUnit}
@@ -140,12 +147,29 @@ export default function App() {
             onToggleUnitCompleted={handleToggleUnitCompleted}
             onExerciseComplete={handleExerciseComplete}
           />
+        ) : currentView === 'method' ? (
+          <MethodPage
+            language={progress.selectedLanguage}
+            onGoToUnits={() => setCurrentView('home')}
+          />
+        ) : currentView === 'matrix' ? (
+          <SynopticMatrix
+            onSelectUnit={handleSelectUnit}
+            language={progress.selectedLanguage}
+          />
+        ) : currentView === 'worksheets' ? (
+          <WorksheetsPage
+            language={progress.selectedLanguage}
+          />
         ) : (
           <UnitDashboard
             onSelectUnit={handleSelectUnit}
             progress={progress}
             language={progress.selectedLanguage}
             onOpenPreparatory={() => setIsPreparatoryOpen(true)}
+            onGoToMatrix={() => setCurrentView('matrix')}
+            onGoToMethod={() => setCurrentView('method')}
+            onGoToWorksheets={() => setCurrentView('worksheets')}
           />
         )}
       </main>
@@ -173,15 +197,128 @@ export default function App() {
         onResetProgress={handleReset}
       />
 
-      {/* Educational Footer */}
-      <footer className="border-t border-amber-200 bg-white/80 py-6 mt-12 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 space-y-2">
-          <p className="font-semibold text-slate-700">
-            Mon Petit Français — Conforme au manuel <strong>Petite Alouette CP (Cycle 2)</strong>, éditions Bordas.
-          </p>
-          <p className="text-[11px] text-slate-400">
-            Contenus textuels, poèmes, phonèmes et repères de pages vérifiés d'après le spécimen officiel. Les exercices complémentaires pour débutants sont clairement indiqués.
-          </p>
+      {/* Comprehensive Website Footer */}
+      <footer className="border-t-2 border-amber-200 bg-white py-10 mt-12 text-slate-600 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {/* Col 1: Brand & Identity */}
+            <div className="space-y-3 md:col-span-1">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🕊️</span>
+                <span className="font-extrabold text-base text-slate-900 font-display">
+                  Mon Petit Français
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Plateforme web interactive pour l’apprentissage de la langue française au Cours Préparatoire (CP Cycle 2), conforme au manuel officiel <em>Petite Alouette</em> (Bordas).
+              </p>
+            </div>
+
+            {/* Col 2: Navigation rapide */}
+            <div className="space-y-2">
+              <div className="font-bold text-slate-900 text-sm">Navigation du Site</div>
+              <ul className="space-y-1.5 text-slate-500">
+                <li>
+                  <button
+                    onClick={() => {
+                      setCurrentUnitId(null);
+                      setCurrentView('home');
+                    }}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Accueil & Les 12 Unités
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      setCurrentUnitId(null);
+                      setCurrentView('matrix');
+                    }}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Tableau Synoptique (pp. 6-7)
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      setCurrentUnitId(null);
+                      setCurrentView('method');
+                    }}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Méthode Pédagogique
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      setCurrentUnitId(null);
+                      setCurrentView('worksheets');
+                    }}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Fiches d'exercices à imprimer
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Col 3: Outils & Ressources */}
+            <div className="space-y-2">
+              <div className="font-bold text-slate-900 text-sm">Outils d'Apprentissage</div>
+              <ul className="space-y-1.5 text-slate-500">
+                <li>
+                  <button
+                    onClick={() => setIsPreparatoryOpen(true)}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Activités Préparatoires (pp. 6-7)
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setIsDictionaryOpen(true)}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Dictionnaire Illustré (12 unités)
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setIsReportOpen(true)}
+                    className="hover:text-amber-600 cursor-pointer"
+                  >
+                    Carnet de Progrès & Étoiles
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Col 4: Références Officielles */}
+            <div className="space-y-2">
+              <div className="font-bold text-slate-900 text-sm">Références Officielles</div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Coordinateur : Abdelhak Bel Lakhdar.<br />
+                Auteurs : Mohamed Azzouzi, Fouad Chaib, Abderzak Elkahlaoui, Mostafa Rassy, Abdelaziz Ziouane.<br />
+                Édition : Bordas éditeur (Programmes 2016).
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400">
+            <div>
+              © 2026 Mon Petit Français. Plateforme éducative pour l'apprentissage du français CP.
+            </div>
+            <div className="flex items-center gap-4">
+              <span>Synthèse vocale intégrée</span>
+              <span>·</span>
+              <span>Support Arabe RTL complet</span>
+              <span>·</span>
+              <span>Sauvegarde automatique</span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
