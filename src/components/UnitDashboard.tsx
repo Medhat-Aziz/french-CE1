@@ -18,6 +18,8 @@ interface UnitDashboardProps {
   progress: UserProgress;
   language: Language;
   onOpenPreparatory: () => void;
+  onOpenQuickQuiz: () => void;
+  onOpenVoiceChat?: () => void;
   onGoToMatrix: () => void;
   onGoToMethod: () => void;
   onGoToWorksheets: () => void;
@@ -28,6 +30,8 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({
   progress,
   language,
   onOpenPreparatory,
+  onOpenQuickQuiz,
+  onOpenVoiceChat,
   onGoToMatrix,
   onGoToMethod,
   onGoToWorksheets,
@@ -81,6 +85,38 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({
               <ArrowRight className="w-4 h-4 text-amber-700" />
             </button>
 
+            {/* Quick Quiz Action Button */}
+            <button
+              type="button"
+              onClick={onOpenQuickQuiz}
+              className="flex items-center gap-2 px-5 py-3 bg-linear-to-r from-yellow-400 to-amber-400 text-amber-950 font-black rounded-2xl shadow-lg border-2 border-yellow-200 transition-all hover:scale-105 hover:bg-yellow-300 cursor-pointer text-sm"
+              title="Lancer le Quiz Rapide sur les unités validées"
+            >
+              <span className="text-base">⚡</span>
+              <span>{t.quickQuiz.buttonLabel}</span>
+              {progress.completedUnits.length > 0 && (
+                <span className="text-[10px] bg-amber-900/20 px-2 py-0.5 rounded-full font-bold">
+                  {progress.completedUnits.length} ⭐
+                </span>
+              )}
+            </button>
+
+            {/* Voice Chat Action Button */}
+            {onOpenVoiceChat && (
+              <button
+                type="button"
+                onClick={onOpenVoiceChat}
+                className="flex items-center gap-2 px-5 py-3 bg-linear-to-r from-orange-500 to-amber-500 text-white font-black rounded-2xl shadow-lg border-2 border-orange-300 transition-all hover:scale-105 hover:from-orange-600 hover:to-amber-600 cursor-pointer text-sm"
+                title={t.voiceChat.subtitle}
+              >
+                <span className="text-base">🎙️</span>
+                <span>{t.voiceChat.buttonLabel}</span>
+                <span className="text-[10px] bg-white/25 px-2 py-0.5 rounded-full font-bold">
+                  Oral CP
+                </span>
+              </button>
+            )}
+
             <button
               onClick={onOpenPreparatory}
               className="flex items-center gap-2 px-4 py-3 bg-amber-600/40 hover:bg-amber-600/60 text-white font-bold rounded-2xl border border-white/30 backdrop-blur-xs transition-colors cursor-pointer text-sm"
@@ -97,6 +133,42 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({
             </button>
           </div>
         </div>
+      </section>
+
+      {/* Quick Quiz Interactive Feature Banner */}
+      <section className="bg-linear-to-r from-amber-500 via-orange-500 to-amber-600 rounded-3xl p-5 sm:p-7 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-5 border-2 border-amber-300 relative overflow-hidden">
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-3xl shadow-inner shrink-0">
+            ⚡
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider bg-black/20 px-2.5 py-0.5 rounded-full">
+                {t.quickQuiz.badge}
+              </span>
+              <span className="text-xs text-amber-100 font-bold">
+                {progress.completedUnits.length > 0
+                  ? `${progress.completedUnits.length} unité(s) révisée(s)`
+                  : 'Programme CP'}
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black font-display">
+              {t.quickQuiz.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-white/90 max-w-xl font-medium">
+              {t.quickQuiz.subtitle}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenQuickQuiz}
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-amber-950 hover:bg-amber-50 font-black rounded-2xl shadow-md transition-all hover:scale-105 cursor-pointer shrink-0 text-sm relative z-10"
+        >
+          <span>⚡ {t.quickQuiz.buttonLabel}</span>
+          <ArrowRight className="w-4 h-4 text-amber-700" />
+        </button>
       </section>
 
       {/* Website Educational Stats Strip */}

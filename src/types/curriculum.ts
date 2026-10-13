@@ -149,4 +149,6 @@ export interface UserProgress {
   selectedLanguage: Language;
   notes: Record<string, string>;
   lastVisitedUnit: number;
+  selectedVoiceName?: string;
+  voicePitch?: number;
 }

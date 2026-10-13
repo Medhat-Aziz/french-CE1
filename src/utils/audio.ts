@@ -1,28 +1,29 @@
 /**
  * Natural French Speech Synthesis Engine for CP Learners (Petite Alouette)
- * 
- * Features:
- * - Prioritizes high-fidelity, natural neural French voices (Google français, Microsoft Natural, Apple Siri/Enhanced)
- * - Gentle, articulate reading pace adapted for young CP learners
- * - Sentence-by-sentence queue with distinct, natural pauses and stops at sentence boundaries (., !, ?, :, \n)
- * - Robust cancellation and state management to prevent audio stutter or overlap
+ * Calibrated to match the requested male, calm, baritone pedagogical voice:
+ * - Prioritizes male French natural/neural voices (Thomas, Paul, Henri, Sébastien, Nicolas, Mathieu)
+ * - Deep, warm baritone pitch calibration (0.88 default, or 0.83 on female fallback voices)
+ * - Gentle, unhurried CP reading pace (0.76x slow, 0.90x normal)
+ * - Sentence-by-sentence queue with distinct, natural stops at sentence boundaries (., !, ?, :, \n)
+ * - Supports custom voice selection & persistent preference
  */
 
 export type SpeechMode = 'slow' | 'normal';
 
 export const SPEED_PRESETS = {
-  slow: 0.78,
-  normal: 0.95,
+  slow: 0.76,
+  normal: 0.90,
 } as const;
 
 export const getSpeechModeFromSpeed = (speed: number): SpeechMode => {
-  return speed <= 0.85 ? 'slow' : 'normal';
+  return speed <= 0.84 ? 'slow' : 'normal';
 };
 
 export interface SpeakOptions {
   rate?: number;
   mode?: SpeechMode;
   pitch?: number;
+  voiceName?: string;
   pauseBetweenSentencesMs?: number;
   onStart?: () => void;
   onSentenceStart?: (index: number, sentence: string) => void;
@@ -30,14 +31,127 @@ export interface SpeakOptions {
   onError?: (err: unknown) => void;
 }
 
+export interface VoiceItem {
+  voice: SpeechSynthesisVoice;
+  isMale: boolean;
+  isRecommended: boolean;
+  displayName: string;
+}
+
+// Male voice keywords for French speech synthesis
+const MALE_VOICE_KEYWORDS = [
+  'paul',
+  'thomas',
+  'henri',
+  'claude',
+  'jerome',
+  'jérôme',
+  'nicolas',
+  'sebastien',
+  'sébastien',
+  'mathieu',
+  'alain',
+  'homme',
+  'male',
+  'guy',
+  'bernard',
+];
+
+// Female voice keywords to avoid when seeking the male voice profile
+const FEMALE_VOICE_KEYWORDS = [
+  'audrey',
+  'aurelie',
+  'aurélie',
+  'denise',
+  'julie',
+  'celine',
+  'céline',
+  'amelie',
+  'amélie',
+  'chloe',
+  'chloé',
+  'hortense',
+  'female',
+  'femme',
+];
+
 let cachedFrenchVoice: SpeechSynthesisVoice | null = null;
+let userSelectedVoiceName: string | null = null;
 let activeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let isPlaybackActive = false;
 let playbackSessionId = 0;
 let voicesInitialized = false;
 
 /**
- * Searches and selects the highest quality, most natural sounding French voice available in the browser.
+ * Checks if a voice matches male characteristics
+ */
+export const isVoiceMale = (voice: SpeechSynthesisVoice): boolean => {
+  const name = voice.name.toLowerCase();
+  for (const kw of MALE_VOICE_KEYWORDS) {
+    if (name.includes(kw)) return true;
+  }
+  for (const kw of FEMALE_VOICE_KEYWORDS) {
+    if (name.includes(kw)) return false;
+  }
+  return false;
+};
+
+/**
+ * Gets all French voices available in the browser with male tagging and recommendation flags
+ */
+export const getAvailableFrenchVoices = (): VoiceItem[] => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return [];
+  }
+
+  const voices = window.speechSynthesis.getVoices() || [];
+  const frenchVoices = voices.filter(
+    (v) =>
+      (v.lang && (v.lang.toLowerCase().startsWith('fr-') || v.lang.toLowerCase() === 'fr')) ||
+      v.name.toLowerCase().includes('français') ||
+      v.name.toLowerCase().includes('french')
+  );
+
+  return frenchVoices.map((v) => {
+    const isMale = isVoiceMale(v);
+    const isNatural =
+      v.name.toLowerCase().includes('natural') ||
+      v.name.toLowerCase().includes('online') ||
+      v.name.toLowerCase().includes('neural') ||
+      v.name.toLowerCase().includes('premium') ||
+      v.name.toLowerCase().includes('enhanced');
+
+    const isRecommended = isMale && isNatural;
+
+    let cleanName = v.name.replace(/Microsoft /g, '').replace(/ Online \(Natural\)/g, ' Natural');
+    if (isMale) {
+      cleanName += ' 🎙️ (Masculin)';
+    }
+
+    return {
+      voice: v,
+      isMale,
+      isRecommended,
+      displayName: cleanName,
+    };
+  });
+};
+
+/**
+ * Explicitly sets the user's preferred voice name
+ */
+export const setUserSelectedVoice = (voiceName: string | null): void => {
+  userSelectedVoiceName = voiceName && voiceName.trim() ? voiceName : null;
+  cachedFrenchVoice = null; // force re-query
+};
+
+export const getUserSelectedVoice = (): string | null => {
+  return userSelectedVoiceName;
+};
+
+/**
+ * Searches and selects the requested male, calm French pedagogical voice.
+ * Prioritizes natural male voices (Thomas, Paul, Henri, Sébastien, Nicolas).
  */
 export const findBestNaturalFrenchVoice = (): SpeechSynthesisVoice | null => {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -49,48 +163,36 @@ export const findBestNaturalFrenchVoice = (): SpeechSynthesisVoice | null => {
     return cachedFrenchVoice;
   }
 
-  // Filter for all French voices
+  // 1. If user explicitly picked a voice that exists, respect their choice
+  if (userSelectedVoiceName) {
+    const userVoice = voices.find((v) => v.name === userSelectedVoiceName);
+    if (userVoice) {
+      cachedFrenchVoice = userVoice;
+      return userVoice;
+    }
+  }
+
+  // 2. Filter for French voices
   const frenchVoices = voices.filter(
-    (v) => v.lang && (v.lang.toLowerCase().startsWith('fr-') || v.lang.toLowerCase() === 'fr')
+    (v) =>
+      (v.lang && (v.lang.toLowerCase().startsWith('fr-') || v.lang.toLowerCase() === 'fr')) ||
+      v.name.toLowerCase().includes('français') ||
+      v.name.toLowerCase().includes('french')
   );
 
   if (frenchVoices.length === 0) {
-    // If no explicit French voice, check if any voice has "french" in its name
-    const namedFrench = voices.find((v) => v.name.toLowerCase().includes('french') || v.name.toLowerCase().includes('français'));
-    if (namedFrench) {
-      cachedFrenchVoice = namedFrench;
-      return namedFrench;
-    }
     return null;
   }
 
-  // Prioritize premium natural / neural / online human voices
-  const naturalKeywords = [
-    'natural',
-    'neural',
-    'online',
-    'google français',
-    'thomas',
-    'audrey',
-    'aurelie',
-    'aurélie',
-    'denise',
-    'henri',
-    'siri',
-    'premium',
-    'enhanced',
-    'celine',
-    'céline',
-    'mathieu',
-    'julie',
-  ];
-
-  // 1. Check for premium/natural voices in fr-FR
-  for (const kw of naturalKeywords) {
+  // 3. Search for top-tier natural/neural MALE French voices
+  for (const kw of MALE_VOICE_KEYWORDS) {
     const match = frenchVoices.find(
       (v) =>
-        v.lang.toLowerCase().includes('fr-fr') &&
-        v.name.toLowerCase().includes(kw)
+        v.name.toLowerCase().includes(kw) &&
+        (v.name.toLowerCase().includes('natural') ||
+          v.name.toLowerCase().includes('online') ||
+          v.name.toLowerCase().includes('neural') ||
+          v.name.toLowerCase().includes('enhanced'))
     );
     if (match) {
       cachedFrenchVoice = match;
@@ -98,18 +200,27 @@ export const findBestNaturalFrenchVoice = (): SpeechSynthesisVoice | null => {
     }
   }
 
-  // 2. Check for any natural/neural French voice (including Canada/Belgium/Switzerland)
-  for (const kw of naturalKeywords) {
-    const match = frenchVoices.find((v) =>
-      v.name.toLowerCase().includes(kw)
-    );
+  // 4. Search for any standard MALE French voice (e.g., Apple Thomas, Nicolas, Sébastien)
+  for (const kw of MALE_VOICE_KEYWORDS) {
+    const match = frenchVoices.find((v) => v.name.toLowerCase().includes(kw));
     if (match) {
       cachedFrenchVoice = match;
       return match;
     }
   }
 
-  // 3. Prefer fr-FR standard voices
+  // 5. Look for French voices that are NOT female
+  const nonFemaleFrFR = frenchVoices.find((v) => {
+    const name = v.name.toLowerCase();
+    const isFemale = FEMALE_VOICE_KEYWORDS.some((kw) => name.includes(kw));
+    return !isFemale && (v.lang.toLowerCase().includes('fr-fr') || v.lang.toLowerCase() === 'fr');
+  });
+  if (nonFemaleFrFR) {
+    cachedFrenchVoice = nonFemaleFrFR;
+    return nonFemaleFrFR;
+  }
+
+  // 6. Prefer standard fr-FR voice
   const standardFrFR = frenchVoices.find(
     (v) => v.lang.toLowerCase() === 'fr-fr' || v.lang.toLowerCase().startsWith('fr-fr')
   );
@@ -118,7 +229,7 @@ export const findBestNaturalFrenchVoice = (): SpeechSynthesisVoice | null => {
     return standardFrFR;
   }
 
-  // 4. Default to first available French voice
+  // 7. Fallback to first available French voice
   cachedFrenchVoice = frenchVoices[0];
   return frenchVoices[0];
 };
@@ -134,10 +245,8 @@ export const initAudioVoices = (): void => {
   if (voicesInitialized) return;
   voicesInitialized = true;
 
-  // Initial lookup
   findBestNaturalFrenchVoice();
 
-  // Listen for voiceschanged event (populated asynchronously in modern browsers)
   if (window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => {
       findBestNaturalFrenchVoice();
@@ -183,7 +292,6 @@ export const splitIntoSentences = (
   if (!cleaned) return [];
 
   // Match sentence segments terminating with . ! ? : or newline
-  // Keep the punctuation attached to the sentence
   const rawSegments = cleaned.split(/(?<=[.!?:\n])\s+/);
   const results: { text: string; pauseAfterMs: number }[] = [];
 
@@ -193,19 +301,17 @@ export const splitIntoSentences = (
     const trimmed = segment.trim();
     if (!trimmed) continue;
 
-    // Tailored pause duration based on mode and terminal punctuation:
-    // Slow mode: noticeable pause (850ms - 950ms) for CP learners to absorb sentence meaning
-    // Normal mode: brief pause (450ms - 500ms) to ensure sentences do not run together
-    let pauseMs = isSlow ? 850 : 450;
+    // Noticeable pause after sentences (850ms - 950ms in slow mode) matching user recording
+    let pauseMs = isSlow ? 900 : 480;
 
     if (trimmed.endsWith('?') || trimmed.endsWith('!')) {
-      pauseMs = isSlow ? 950 : 500;
+      pauseMs = isSlow ? 950 : 520;
     } else if (trimmed.endsWith(':') || trimmed.endsWith(';')) {
-      pauseMs = isSlow ? 700 : 380;
+      pauseMs = isSlow ? 720 : 380;
     } else if (trimmed.endsWith('.')) {
-      pauseMs = isSlow ? 850 : 450;
+      pauseMs = isSlow ? 900 : 480;
     } else {
-      pauseMs = isSlow ? 600 : 320;
+      pauseMs = isSlow ? 620 : 320;
     }
 
     results.push({
@@ -216,11 +322,11 @@ export const splitIntoSentences = (
 
   return results.length > 0
     ? results
-    : [{ text: cleaned, pauseAfterMs: isSlow ? 800 : 400 }];
+    : [{ text: cleaned, pauseAfterMs: isSlow ? 850 : 450 }];
 };
 
 /**
- * Speaks French text with natural language voice selection, gentle CP pacing,
+ * Speaks French text with the calibrated male pedagogical voice, gentle CP pacing,
  * and a clear pause/stop at the end of each sentence.
  */
 export const speakFrench = (
@@ -233,14 +339,12 @@ export const speakFrench = (
     return false;
   }
 
-  // Cancel any active speech or pending queue
   stopSpeech();
 
   // Determine effective mode and speed
   const effectiveMode: SpeechMode =
     options.mode || (options.rate ? getSpeechModeFromSpeed(options.rate) : 'slow');
 
-  // Rate: CP learners require a gentle, articulate pace
   const targetRate =
     options.rate ?? (effectiveMode === 'slow' ? SPEED_PRESETS.slow : SPEED_PRESETS.normal);
 
@@ -249,16 +353,20 @@ export const speakFrench = (
 
   const voice = cachedFrenchVoice || findBestNaturalFrenchVoice();
 
+  // Pitch calibration to match the deep, calm male voice sample:
+  // If the voice is explicitly male, pitch 0.88 gives a warm, calm baritone.
+  // If only a female voice is available on this browser, pitch 0.83 lowers the formant to sound masculine.
+  const isMale = voice ? isVoiceMale(voice) : true;
+  const defaultCalibratedPitch = isMale ? 0.88 : 0.83;
+  const targetPitch = options.pitch ?? defaultCalibratedPitch;
+
   const thisSessionId = ++playbackSessionId;
   isPlaybackActive = true;
-
-  const targetPitch = options.pitch ?? 1.0;
   const userPauseMs = options.pauseBetweenSentencesMs;
 
   let currentIndex = 0;
 
   const playNextSentence = () => {
-    // If playback was cancelled or replaced by another session, stop immediately
     if (!isPlaybackActive || playbackSessionId !== thisSessionId) {
       return;
     }
@@ -293,8 +401,7 @@ export const speakFrench = (
       currentIndex++;
 
       if (currentIndex < sentences.length) {
-        // NATURAL STOP AT THE END OF THE SENTENCE
-        // Insert silence pause before speaking the next sentence
+        // DISTINCT STOP AT SENTENCE BOUNDARY
         const pauseDuration = userPauseMs ?? currentItem.pauseAfterMs;
 
         activeTimeoutId = setTimeout(() => {
@@ -302,7 +409,6 @@ export const speakFrench = (
           playNextSentence();
         }, pauseDuration);
       } else {
-        // Finished all sentences
         isPlaybackActive = false;
         options.onEnd?.();
       }
@@ -311,7 +417,6 @@ export const speakFrench = (
     utterance.onerror = (e) => {
       if (playbackSessionId !== thisSessionId) return;
       console.warn('SpeechSynthesis utterance error:', e);
-      // Proceed to next or complete gracefully
       currentIndex++;
       if (currentIndex < sentences.length) {
         activeTimeoutId = setTimeout(playNextSentence, 200);
@@ -336,4 +441,18 @@ export const speakFrench = (
 
 export const isAudioSpeaking = (): boolean => {
   return isPlaybackActive;
+};
+
+/**
+ * Returns current active voice name and profile
+ */
+export const getCurrentVoiceProfile = (): { name: string; isMale: boolean } => {
+  const v = cachedFrenchVoice || findBestNaturalFrenchVoice();
+  if (!v) {
+    return { name: 'Voix masculine par défaut', isMale: true };
+  }
+  return {
+    name: v.name,
+    isMale: isVoiceMale(v),
+  };
 };

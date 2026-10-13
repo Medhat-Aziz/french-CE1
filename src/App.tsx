@@ -4,9 +4,9 @@ import {
   saveUserProgress,
   resetProgress,
 } from './utils/storage';
-import { initAudioVoices } from './utils/audio';
+import { initAudioVoices, setUserSelectedVoice } from './utils/audio';
 import { UserProgress, Language } from './types/curriculum';
-import { getUnitById } from './data/curriculumData';
+import { getUnitById, allUnits } from './data/curriculumData';
 import { Navbar, WebsiteView } from './components/Navbar';
 import { UnitDashboard } from './components/UnitDashboard';
 import { UnitView } from './components/UnitView';
@@ -16,6 +16,9 @@ import { WorksheetsPage } from './components/WorksheetsPage';
 import { PreparatoryModal } from './components/PreparatoryModal';
 import { DictionaryModal } from './components/DictionaryModal';
 import { ProgressReportModal } from './components/ProgressReportModal';
+import { QuickQuizModal } from './components/QuickQuizModal';
+import { VoiceChatModal } from './components/VoiceChatModal';
+import { Mic } from 'lucide-react';
 import { getTranslation } from './translations/i18n';
 
 export default function App() {
@@ -25,11 +28,16 @@ export default function App() {
   const [isPreparatoryOpen, setIsPreparatoryOpen] = useState(false);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isQuickQuizOpen, setIsQuickQuizOpen] = useState(false);
+  const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false);
 
-  // Initialize browser speech synthesis
+  // Initialize browser speech synthesis & sync selected voice
   useEffect(() => {
     initAudioVoices();
-  }, []);
+    if (progress.selectedVoiceName) {
+      setUserSelectedVoice(progress.selectedVoiceName);
+    }
+  }, [progress.selectedVoiceName]);
 
   // Sync language and RTL direction with HTML document element
   useEffect(() => {
@@ -65,6 +73,14 @@ export default function App() {
     setProgress((prev) => ({
       ...prev,
       soundSpeed: speed,
+    }));
+  };
+
+  const handleSelectVoice = (voiceName: string) => {
+    setUserSelectedVoice(voiceName);
+    setProgress((prev) => ({
+      ...prev,
+      selectedVoiceName: voiceName,
     }));
   };
 
@@ -129,7 +145,11 @@ export default function App() {
         starsEarned={progress.starsEarned}
         soundSpeed={progress.soundSpeed}
         onChangeSoundSpeed={handleChangeSoundSpeed}
+        selectedVoiceName={progress.selectedVoiceName}
+        onSelectVoice={handleSelectVoice}
         onOpenPreparatory={() => setIsPreparatoryOpen(true)}
+        onOpenQuickQuiz={() => setIsQuickQuizOpen(true)}
+        onOpenVoiceChat={() => setIsVoiceChatOpen(true)}
         onOpenDictionary={() => setIsDictionaryOpen(true)}
         onOpenReport={() => setIsReportOpen(true)}
       />
@@ -167,6 +187,8 @@ export default function App() {
             progress={progress}
             language={progress.selectedLanguage}
             onOpenPreparatory={() => setIsPreparatoryOpen(true)}
+            onOpenQuickQuiz={() => setIsQuickQuizOpen(true)}
+            onOpenVoiceChat={() => setIsVoiceChatOpen(true)}
             onGoToMatrix={() => setCurrentView('matrix')}
             onGoToMethod={() => setCurrentView('method')}
             onGoToWorksheets={() => setCurrentView('worksheets')}
@@ -174,7 +196,44 @@ export default function App() {
         )}
       </main>
 
+      {/* Floating Voice Chat Quick Launcher Button */}
+      <button
+        type="button"
+        onClick={() => setIsVoiceChatOpen(true)}
+        className="fixed bottom-5 right-5 z-30 flex items-center gap-2.5 px-4 py-3 bg-linear-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm rounded-full shadow-xl hover:shadow-2xl border-2 border-amber-200 transition-all hover:scale-108 cursor-pointer group"
+        title="Ouvrir le Salon Vocal de Petite Alouette (oral et prononciation)"
+        aria-label="Ouvrir le Salon Vocal"
+      >
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+        </span>
+        <Mic className="w-4 h-4 group-hover:scale-110 transition-transform" />
+        <span className="hidden sm:inline font-display">{t.voiceChat.buttonLabel}</span>
+      </button>
+
       {/* Modals */}
+      <VoiceChatModal
+        isOpen={isVoiceChatOpen}
+        onClose={() => setIsVoiceChatOpen(false)}
+        language={progress.selectedLanguage}
+        soundSpeed={progress.soundSpeed}
+        onChangeSoundSpeed={handleChangeSoundSpeed}
+        selectedVoiceName={progress.selectedVoiceName}
+        currentUnitId={currentUnitId}
+      />
+
+      <QuickQuizModal
+        isOpen={isQuickQuizOpen}
+        onClose={() => setIsQuickQuizOpen(false)}
+        completedUnitIds={progress.completedUnits}
+        allUnits={allUnits}
+        language={progress.selectedLanguage}
+        soundSpeed={progress.soundSpeed}
+        onExerciseComplete={handleExerciseComplete}
+        onSelectUnit={handleSelectUnit}
+      />
+
       <PreparatoryModal
         isOpen={isPreparatoryOpen}
         onClose={() => setIsPreparatoryOpen(false)}
