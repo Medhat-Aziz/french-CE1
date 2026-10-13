@@ -1,0 +1,6 @@
+{
+  "name": "Mon Petit Français - Petite Alouette CP",
+  "description": "Application pédagogique interactive basée sur le manuel Petite Alouette CP (Cycle 2) pour l'apprentissage du français, de la phonétique, de la lecture et de la langue.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
