@@ -9,7 +9,9 @@ permissions:
 
 jobs:
   build-android:
-    runs-on: ubuntu-latest
+    name: Build Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -19,6 +21,12 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          package-manager-cache: false
+
+      - name: Check Node and npm
+        run: |
+          node --version
+          npm --version
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -31,18 +39,23 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install project dependencies
+        run: |
+          npm config set legacy-peer-deps true
+          npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Install Capacitor
         run: |
-          npm install @capacitor/core @capacitor/android --no-audit --no-fund
-          npm install --save-dev @capacitor/cli --no-audit --no-fund
+          npm install @capacitor/core @capacitor/android --legacy-peer-deps --no-audit --no-fund
+          npm install --save-dev @capacitor/cli --legacy-peer-deps --no-audit --no-fund
 
       - name: Configure Capacitor
         shell: bash
         run: |
-          if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ] && [ ! -f capacitor.config.js ] && [ ! -f capacitor.config.mjs ]; then
+          if [ ! -f capacitor.config.ts ] && \
+             [ ! -f capacitor.config.json ] && \
+             [ ! -f capacitor.config.js ] && \
+             [ ! -f capacitor.config.mjs ]; then
             cat > capacitor.config.json <<'EOF'
           {
             "appId": "com.medhataziz.frenchce1",
@@ -52,17 +65,24 @@ jobs:
           EOF
           fi
 
-      - name: Build React app
+      - name: Build web application
         run: npm run build
 
-      - name: Prepare Android project
+      - name: Verify web build
+        run: |
+          test -f dist/index.html || {
+            echo "ERROR: dist/index.html was not generated"
+            exit 1
+          }
+
+      - name: Create Android project
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
           npx cap sync android
 
-      - name: Build APK
+      - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
